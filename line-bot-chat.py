@@ -1,29 +1,9 @@
 import threading
 from flask import Flask, request, abort
-
-from linebot.v3 import (
-    WebhookHandler
-)
-from linebot.v3.exceptions import (
-    InvalidSignatureError
-)
-from linebot.v3.messaging import (
-    Configuration,
-    ApiClient,
-    MessagingApi,
-    ReplyMessageRequest,
-    TextMessage
-)
-from linebot.v3.webhooks import (
-    MessageEvent,
-    TextMessageContent
-)
-from linebot.models.events import (
-    JoinEvent,
-    LeaveEvent,
-    MemberJoinedEvent,
-    MemberLeftEvent
-)
+from linebot.v3 import WebhookHandler
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.messaging import ApiClient, MessagingApi, ReplyMessageRequest
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, MemberJoinedEvent
 import os
 from dotenv import load_dotenv
 import logging
@@ -32,8 +12,11 @@ import logging
 load_dotenv()
 
 # Initialize APIs
-messaging_api = Configuration(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
+line_access_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+line_channel_secret = os.getenv("LINE_CHANNEL_SECRET")
+handler = WebhookHandler(line_channel_secret)
+api_client = ApiClient(access_token=line_access_token)
+messaging_api = MessagingApi(api_client)
 
 # Flask app setup
 app = Flask(__name__)
@@ -44,23 +27,50 @@ pt_message = "這是預設的訊息"  # Default message
 pending_members = {}  # Dictionary for pending members
 SECRET_CODE = "your_secret_password"  # Secret password
 
+# Logging setup
+logging.basicConfig(level=logging.INFO)
+
 @app.route("/callback", methods=['POST'])
 def callback():
-    # get X-Line-Signature header value
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers.get('X-Line-Signature', '')
 
-    # get request body as text
+    # Get request body as text
     body = request.get_data(as_text=True)
     app.logger.info("Request body: " + body)
 
-    # handle webhook body
+    # Handle webhook body
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
-        app.logger.info("Invalid signature. Please check your channel access token/channel secret.")
+        app.logger.error("Invalid signature. Please check your channel access token/channel secret.")
         abort(400)
 
     return 'OK'
+
+
+@handler.add(MessageEvent)
+def handle_message(event):
+    user_id = event.source.user_id
+    message_text = event.message.text.strip()
+
+    logging.info(f"User ID: {user_id}, Message: {message_text}")
+
+    # Example reply
+    if message_text == "ping":
+        reply_message = "pong"
+    else:
+        reply_message = f"Your User ID: {user_id}"
+
+    try:
+        messaging_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessageContent(text=reply_message)]
+            )
+        )
+    except Exception as e:
+        logging.error(f"Error replying to message: {e}")
+
 
 @handler.add(MemberJoinedEvent)
 def handle_member_join(event):
@@ -68,88 +78,36 @@ def handle_member_join(event):
         user_id = member.user_id
         pending_members[user_id] = {"verified": False}
 
-        # Send welcome message with secret code
-        messaging_api.push_message(
-            user_id,
-            messages=[
-                TextMessageContent(
-                    text=f"歡迎加入！請在 300 秒內輸入暗號，否則將被移出群組。\n暗號格式：{SECRET_CODE}"
-                )
-            ]
-        )
+        # Send welcome message
+        try:
+            messaging_api.push_message(
+                to=user_id,
+                messages=[
+                    TextMessageContent(
+                        text=f"歡迎加入！請在 300 秒內輸入暗號，否則將被移出群組。\n暗號格式：{SECRET_CODE}"
+                    )
+                ]
+            )
+        except Exception as e:
+            logging.error(f"Error sending welcome message: {e}")
+
         # Start timer for removal
         timer = threading.Timer(300, kick_member_if_unverified, args=(event.source.group_id, user_id))
         pending_members[user_id]["timer"] = timer
         timer.start()
 
-@handler.add(MessageEvent)
-def handle_message(event):
-    global pt_message
-    user_id = event.source.user_id
-    message_text = event.message.text.strip()
-
-    try:
-        if user_id in pending_members:
-            if message_text == SECRET_CODE:
-                pending_members[user_id]["verified"] = True
-                pending_members[user_id]["timer"].cancel()
-                messaging_api.reply_message(
-                    reply_token=event.reply_token,
-                    messages=[TextMessageContent(text="驗證成功！歡迎加入群組 🎉")]
-                )
-                del pending_members[user_id]
-            else:
-                messaging_api.reply_message(
-                    reply_token=event.reply_token,
-                    messages=[TextMessageContent(text="暗號錯誤，請重新輸入正確的暗號。")]
-                )
-            return
-
-        # Admin commands
-        if message_text.startswith("/pt"):
-            if user_id in ADMIN_USER_IDS:
-                new_message = message_text[4:].strip()
-                if new_message:
-                    pt_message = new_message
-                    messaging_api.reply_message(
-                        reply_token=event.reply_token,
-                        messages=[TextMessageContent(text=f"已更新/pt的設置內容：{pt_message}")]
-                    )
-                else:
-                    messaging_api.reply_message(
-                        reply_token=event.reply_token,
-                        messages=[TextMessageContent(text="請提供更新的訊息內容！")]
-                    )
-            else:
-                messaging_api.reply_message(
-                    reply_token=event.reply_token,
-                    messages=[TextMessageContent(text="您沒有權限設置/pt消息！")]
-                )
-        elif message_text == "pt":
-            messaging_api.reply_message(
-                reply_token=event.reply_token,
-                messages=[TextMessageContent(text=f"當前設置的/pt消息是：{pt_message}")]
-            )
-
-        # Other commands...
-    except Exception as e:
-        logging.error(f"Error handling message: {e}")
-        messaging_api.reply_message(
-            reply_token=event.reply_token,
-            messages=[TextMessageContent(text="系統發生錯誤，請稍後再試。")]
-        )
 
 def kick_member_if_unverified(group_id, user_id):
     if user_id in pending_members and not pending_members[user_id]["verified"]:
-        messaging_api.push_message(
-            group_id,
-            messages=[TextMessageContent(text=f"用戶 <@{user_id}> 未通過驗證，建議移出群組。")]
-        )
-        del pending_members[user_id]
-@handler.add(MessageEvent)
-def handle_message(event):
-    user_id = event.source.user_id
-    print(f"User ID: {user_id}")
+        try:
+            messaging_api.push_message(
+                to=group_id,
+                messages=[TextMessageContent(text=f"用戶 <@{user_id}> 未通過驗證，建議移出群組。")]
+            )
+            del pending_members[user_id]
+        except Exception as e:
+            logging.error(f"Error kicking member: {e}")
+
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
