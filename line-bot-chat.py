@@ -146,6 +146,10 @@ def kick_member_if_unverified(group_id, user_id):
             messages=[TextMessageContent(text=f"用戶 <@{user_id}> 未通過驗證，建議移出群組。")]
         )
         del pending_members[user_id]
+@handler.add(MessageEvent)
+def handle_message(event):
+    user_id = event.source.user_id
+    print(f"User ID: {user_id}")
 
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5000))
