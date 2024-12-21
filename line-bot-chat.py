@@ -24,6 +24,10 @@ pt_message = "這是預設的訊息"
 pending_members = {}  # Dictionary for pending members
 SECRET_CODE = "your_secret_password"  # Secret password
 
+@app.route("/", methods=['GET'])
+def home():
+    return "LINE Bot is running!", 200
+    
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
