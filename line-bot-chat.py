@@ -148,4 +148,4 @@ def kick_member_if_unverified(group_id, user_id):
         del pending_members[user_id]
 
 if __name__ == "__main__":
-    app.run(port=8000)
+    app.run(host="0.0.0.0", port=int(environ.get("PORT", 8000)))
