@@ -2,8 +2,8 @@ import threading
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import Configuration, MessagingApi, ReplyMessageRequest, TextMessage
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, MemberJoinedEvent
+from linebot.v3.messaging import MessagingApi, TextMessage
+from linebot.v3.webhooks import MemberJoinedEvent, MessageEvent
 import os
 from dotenv import load_dotenv
 import logging
@@ -12,14 +12,14 @@ import logging
 load_dotenv()
 
 # Initialize APIs
-messaging_api = Configuration(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
+messaging_api = MessagingApi(channel_access_token=os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+handler = WebhookHandler(channel_secret=os.getenv("LINE_CHANNEL_SECRET"))
 
 # Flask app setup
 app = Flask(__name__)
 
 # Admin and verification settings
-ADMIN_USER_IDS = ['']  # Add your USER_ID after obtaining it
+ADMIN_USER_IDS = []  # Add your USER_ID after obtaining it
 pt_message = "這是預設的訊息"
 pending_members = {}  # Dictionary for pending members
 SECRET_CODE = "your_secret_password"  # Secret password
@@ -27,17 +27,17 @@ SECRET_CODE = "your_secret_password"  # Secret password
 @app.route("/", methods=['GET'])
 def home():
     return "LINE Bot is running!", 200
-    
+
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers.get('X-Line-Signature')
     body = request.get_data(as_text=True)
-    app.logger.info("Request body: " + body)
+    app.logger.info(f"Request body: {body}")
 
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
-        app.logger.info("Invalid signature. Check your channel access token/channel secret.")
+        app.logger.error("Invalid signature error.")
         abort(400)
 
     return 'OK'
@@ -49,8 +49,8 @@ def handle_member_join(event):
         group_id = event.source.group_id
         pending_members[user_id] = {"verified": False}
 
-        # Send welcome message with secret code
         try:
+            # Send welcome message with secret code
             messaging_api.push_message(
                 to=user_id,
                 messages=[
@@ -90,7 +90,7 @@ def handle_message(event):
                 )
             return
 
-        # Admin commands
+        # Handle admin commands
         if message_text.startswith("/pt"):
             if user_id in ADMIN_USER_IDS:
                 new_message = message_text[4:].strip()
@@ -158,5 +158,5 @@ def kick_member_if_unverified(group_id, user_id):
             app.logger.error(f"Error kicking user {user_id}: {e}")
 
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
