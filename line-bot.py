@@ -1,6 +1,7 @@
 import threading
 from flask import Flask, request, abort
-from linebot import LineBotApi, WebhookHandler
+from linebot.v3.webhook import WebhookHandler
+from linebot.v3 import LineBotApi
 from linebot.models import (MessageEvent, TextMessage, TextSendMessage, MemberJoinedEvent)
 import os
 from dotenv import load_dotenv
