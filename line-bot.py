@@ -32,7 +32,7 @@ import logging
 load_dotenv()
 
 # Initialize APIs
-messaging_api = Configuration(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+messaging_api = MessagingApi(ApiClient(Configuration(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))))
 handler = WebhookHandler(os.getenv("LINE_CHANNEL_SECRET"))
 
 # Flask app setup
