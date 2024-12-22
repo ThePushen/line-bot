@@ -2,7 +2,7 @@ import threading
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import MessagingApi, TextMessage
+from linebot.v3.messaging import MessagingApi, TextMessage, ReplyMessageRequest
 from linebot.v3.webhooks import MemberJoinedEvent, MessageEvent
 import os
 from dotenv import load_dotenv
@@ -79,14 +79,18 @@ def handle_message(event):
                 pending_members[user_id]["verified"] = True
                 pending_members[user_id]["timer"].cancel()
                 messaging_api.reply_message(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text="驗證成功！歡迎加入群組 🎉")]
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text="驗證成功！歡迎加入群組 🎉")]
+                    )
                 )
                 del pending_members[user_id]
             else:
                 messaging_api.reply_message(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text="暗號錯誤，請重新輸入正確的暗號。")]
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text="暗號錯誤，請重新輸入正確的暗號。")]
+                    )
                 )
             return
 
@@ -97,23 +101,31 @@ def handle_message(event):
                 if new_message:
                     pt_message = new_message
                     messaging_api.reply_message(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text=f"已更新/pt的設置內容：{pt_message}")]
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text=f"已更新/pt的設置內容：{pt_message}")]
+                        )
                     )
                 else:
                     messaging_api.reply_message(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text="請提供更新的訊息內容！")]
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text="請提供更新的訊息內容！")]
+                        )
                     )
             else:
                 messaging_api.reply_message(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text="您沒有權限設置/pt消息！")]
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text="您沒有權限設置/pt消息！")]
+                    )
                 )
         elif message_text == "pt":
             messaging_api.reply_message(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=f"當前設置的/pt消息是：{pt_message}")]
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=f"當前設置的/pt消息是：{pt_message}")]
+                )
             )
         elif message_text.startswith("/add_admin"):
             if user_id in ADMIN_USER_IDS:
@@ -121,23 +133,31 @@ def handle_message(event):
                 if new_admin_id and new_admin_id not in ADMIN_USER_IDS:
                     ADMIN_USER_IDS.append(new_admin_id)
                     messaging_api.reply_message(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text=f"成功新增管理員：{new_admin_id}")]
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text=f"成功新增管理員：{new_admin_id}")]
+                        )
                     )
                 else:
                     messaging_api.reply_message(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text="新增失敗，該用戶已是管理員或 ID 無效。")]
+                        ReplyMessageRequest(
+                            reply_token=event.reply_token,
+                            messages=[TextMessage(text="新增失敗，該用戶已是管理員或 ID 無效。")]
+                        )
                     )
             else:
                 messaging_api.reply_message(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text="您沒有權限新增管理員！")]
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text="您沒有權限新增管理員！")]
+                    )
                 )
         elif message_text == "/my_id":
             messaging_api.reply_message(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=f"您的 USER_ID 是：{user_id}")]
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=f"您的 USER_ID 是：{user_id}")]
+                )
             )
     except Exception as e:
         logging.error(f"Error handling message: {e}")
